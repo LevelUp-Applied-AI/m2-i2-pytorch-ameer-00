@@ -44,3 +44,25 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 **Branch:** `integration-2/pytorch`
 
 **Submit:** PR URL → TalentLMS Unit 8 text field
+
+## Challenge Tier 1 — Evaluation
+
+### Train/Test Split
+- Training set: 160 records (80%)
+- Test set: 40 records (20%)
+
+### Metrics
+| Metric | Train | Test |
+|--------|-------|------|
+| MAE    | 42,270 JOD | 40,027 JOD |
+| R²     | -8.70 | -10.73 |
+
+### Overfitting Analysis
+The model shows similar performance on train and test sets,
+suggesting no overfitting. However, the negative R² indicates
+the model needs more epochs or a larger architecture to learn
+meaningful patterns from the data.
+
+### Output Files
+- `predictions_plot.png` — Actual vs Predicted scatter plot
+- `loss_curve.png` — Training loss over 100 epochs
