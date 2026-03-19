@@ -13,6 +13,8 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
+import matplotlib.pyplot as plt
+
 
 
 # ─── Model Definition ─────────────────────────────────────────────────────────
@@ -26,11 +28,9 @@ class HousingModel(nn.Module):
     def __init__(self):
         """Define the model layers."""
         super().__init__()
-        # TODO: Define three layers as attributes:
-        #   self.layer1 = nn.Linear(5, 32)   — 5 input features → 32 hidden units
-        #   self.relu   = nn.ReLU()           — activation function
-        #   self.layer2 = nn.Linear(32, 1)    — 32 hidden → 1 output (price prediction)
-        pass
+        self.layer1 = nn.Linear(5, 32)
+        self.relu   = nn.ReLU()
+        self.layer2 = nn.Linear(32, 1)
 
     def forward(self, x):
         """Define the forward pass.
@@ -41,9 +41,10 @@ class HousingModel(nn.Module):
         Returns:
             torch.Tensor: Predictions of shape (N, 1).
         """
-        # TODO: Pass x through layer1, then relu, then layer2
-        # TODO: Return the output
-        pass
+        x = self.layer1(x)
+        x = self.relu(x)
+        x = self.layer2(x)
+        return x
 
 
 # ─── Main Training Script ─────────────────────────────────────────────────────
@@ -52,47 +53,108 @@ def main():
     """Load data, train HousingModel, and save predictions."""
 
     # ── 1. Load Data ──────────────────────────────────────────────────────────
-    # TODO: Load data/housing.csv using pd.read_csv
-    # TODO: Print the shape of the DataFrame
-
+    df = pd.read_csv('data/housing.csv')
+    print(f"Data shape: {df.shape}")
     # ── 2. Separate Features and Target ──────────────────────────────────────
     feature_cols = ['area_sqm', 'bedrooms', 'floor', 'age_years', 'distance_to_center_km']
-    # TODO: X = df[feature_cols]
-    # TODO: y = df[['price_jod']]   — use double brackets to keep shape (N, 1)
-
+    X = df[feature_cols]
+    y = df[['price_jod']]
     # ── 3. Standardize Features ───────────────────────────────────────────────
-    # TODO: X_mean = X.mean()
-    # TODO: X_std  = X.std()
-    # TODO: X_scaled = (X - X_mean) / X_std
+    X_mean = X.mean()
+    X_std  = X.std()
+    X_scaled = (X - X_mean) / X_std
     # Why: features have very different scales; standardization ensures
     #      gradient updates are balanced across all input dimensions.
 
     # ── 4. Convert to Tensors ─────────────────────────────────────────────────
-    # TODO: X_tensor = torch.tensor(X_scaled.values, dtype=torch.float32)
-    # TODO: y_tensor = torch.tensor(y.values,        dtype=torch.float32)
-    # TODO: Print X_tensor.shape and y_tensor.shape
-
+    X_tensor = torch.tensor(X_scaled.values, dtype=torch.float32)
+    y_tensor = torch.tensor(y.values,        dtype=torch.float32)
+    print(f"X shape: {X_tensor.shape}")
+    print(f"y shape: {y_tensor.shape}")
     # ── 5. Instantiate Model, Loss, and Optimizer ─────────────────────────────
-    # TODO: model     = HousingModel()
-    # TODO: criterion = nn.MSELoss()
-    # TODO: optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    torch.manual_seed(42)
+    indices    = torch.randperm(len(X_tensor))
+    X_shuffled = X_tensor[indices]
+    y_shuffled = y_tensor[indices]
+    split   = int(0.8 * len(X_tensor))
+    X_train, X_test = X_shuffled[:split], X_shuffled[split:]
+    y_train, y_test = y_shuffled[:split], y_shuffled[split:]
+    print(f"Train size: {len(X_train)}, Test size: {len(X_test)}")
 
     # ── 6. Training Loop ──────────────────────────────────────────────────────
-    num_epochs = 100
-    # TODO: for epoch in range(num_epochs):
-    #     Forward pass:  predictions = model(X_tensor)
-    #     Compute loss:  loss = criterion(predictions, y_tensor)
-    #     Zero grads:    optimizer.zero_grad()
-    #     Backward:      loss.backward()
-    #     Update:        optimizer.step()
-    #     Print every 10 epochs: f"Epoch {epoch:3d}: Loss = {loss.item():.4f}"
-
+    model     = HousingModel()
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     # ── 7. Save Predictions ───────────────────────────────────────────────────
-    # TODO: Generate predictions (wrap in torch.no_grad() for good practice)
-    # TODO: Convert predictions and actuals to numpy arrays
-    # TODO: Build a DataFrame with columns 'actual' and 'predicted'
-    # TODO: Save to predictions.csv with index=False
-    # TODO: Print "Saved predictions.csv"
+    num_epochs   = 100
+    loss_history = []
+    for epoch in range(num_epochs):
+        model.train()
+        predictions = model(X_train)
+        loss        = criterion(predictions, y_train)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        loss_history.append(loss.item())
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch:3d}: Loss = {loss.item():.4f}")
+    # 8. Evaluation
+    model.eval()
+    with torch.no_grad():
+        train_preds = model(X_train).numpy().flatten()
+        test_preds  = model(X_test).numpy().flatten()
+
+    train_actual = y_train.numpy().flatten()
+    test_actual  = y_test.numpy().flatten()
+
+    train_mae = np.mean(np.abs(train_actual - train_preds))
+    test_mae  = np.mean(np.abs(test_actual  - test_preds))
+
+    def r_squared(actual, preds):
+        ss_res = np.sum((actual - preds) ** 2)
+        ss_tot = np.sum((actual - np.mean(actual)) ** 2)
+        return 1 - (ss_res / ss_tot)
+
+    train_r2 = r_squared(train_actual, train_preds)
+    test_r2  = r_squared(test_actual,  test_preds)
+
+    print(f"\n=== Evaluation ===")
+    print(f"Train MAE: {train_mae:.2f} JOD  |  Train R²: {train_r2:.4f}")
+    print(f"Test  MAE: {test_mae:.2f} JOD  |  Test  R²: {test_r2:.4f}")
+
+    # 9. Save Predictions CSV
+    with torch.no_grad():
+        predictions_tensor = model(X_tensor)
+    results_df = pd.DataFrame({
+        'actual':    y_tensor.numpy().flatten(),
+        'predicted': predictions_tensor.numpy().flatten()
+    })
+    results_df.to_csv('predictions.csv', index=False)
+    print("Saved predictions.csv")
+
+    # 10. Actual vs Predicted Plot
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.scatter(test_actual, test_preds, alpha=0.6)
+    min_val = min(test_actual.min(), test_preds.min())
+    max_val = max(test_actual.max(), test_preds.max())
+    ax.plot([min_val, max_val], [min_val, max_val], 'r--', label='Perfect prediction')
+    ax.set_xlabel('Actual Price (JOD)')
+    ax.set_ylabel('Predicted Price (JOD)')
+    ax.set_title('Actual vs Predicted Prices (Test Set)')
+    ax.legend()
+    fig.savefig('predictions_plot.png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print("Saved predictions_plot.png")
+
+    # 11. Loss Curve
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(range(num_epochs), loss_history)
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Loss')
+    ax.set_title('Training Loss Curve')
+    fig.savefig('loss_curve.png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print("Saved loss_curve.png")
 
 
 if __name__ == "__main__":
